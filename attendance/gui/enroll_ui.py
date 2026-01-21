@@ -2,12 +2,13 @@ import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
 import cv2
-import numpy as np
 
+from gui.scrollable import create_scrollable_page
 from gui.base_ui import BaseFrame
 from core.camera import Camera
 from core.enroll_manager import EnrollManager
 from core.insightface_singleton import InsightFaceSingleton
+from core.anti_spoofing import AntiSpoofing
 
 
 class EnrollUI(BaseFrame):
@@ -41,63 +42,34 @@ class EnrollUI(BaseFrame):
         self.app = InsightFaceSingleton.get_instance(
             name="buffalo_l",
             providers=["CPUExecutionProvider"],
-            det_size=(320, 320),
+            det_size=(480, 480),
             ctx_id=0
         )
 
+        self.anti_spoof = AntiSpoofing()
+
+    # =====================================================
+    def create_placeholder_image(self):
+        """Create a placeholder image for the video label"""
+        img = Image.new('RGB', (640, 480), color='#34495e')
+        return ImageTk.PhotoImage(img)
+
     # =====================================================
     def setup_ui(self):
-        """Thiết lập giao diện"""
+        # Create placeholder image for video label (640x480)
+        self.placeholder_image = self.create_placeholder_image()
 
-        # ========= HEADER =========
-        header = tk.Frame(self, bg="#2c3e50", height=80)
-        header.pack(fill="x", side="top")
-        header.pack_propagate(False)
+        content = create_scrollable_page(
+            parent=self,
+            title_text="📋 ĐĂNG KÝ SINH VIÊN"
+        )
 
-        tk.Label(
-            header,
-            text="📋 ĐĂNG KÝ SINH VIÊN",
-            font=("Arial", 20, "bold"),
-            bg="#2c3e50",
-            fg="white"
-        ).pack(expand=True)
-
-        # ========= SCROLLABLE CONTAINER =========
-        container = tk.Frame(self)
-        container.pack(fill="both", expand=True, padx=20, pady=20)
-
-        canvas = tk.Canvas(container, bg="#f5f5f5", highlightthickness=0)
-        scrollbar = ttk.Scrollbar(
-            container, orient="vertical", command=canvas.yview)
-
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        scrollbar.pack(side="right", fill="y")
-        canvas.pack(side="left", fill="both", expand=True)
-
-        # ========= MAIN CONTENT =========
-        content = tk.Frame(canvas, bg="#f5f5f5")
-
-        # Gắn content vào canvas
-        canvas_window = canvas.create_window(
-            (0, 0), window=content, anchor="nw")
-
-        # Cập nhật vùng cuộn khi content thay đổi size
-        def on_frame_configure(event):
-            canvas.configure(scrollregion=canvas.bbox("all"))
-
-        content.bind("<Configure>", on_frame_configure)
-
-        # Giữ content rộng bằng canvas
-        def on_canvas_configure(event):
-            canvas.itemconfig(canvas_window, width=event.width)
-
-        canvas.bind("<Configure>", on_canvas_configure)
-
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        # tk.Label(
+        #     content,
+        #     text="Thông tin sinh viên",
+        #     font=("Arial", 14),
+        #     bg="#f5f5f5"
+        # ).pack(pady=10)
 
         # ========= FORM =========
         form_frame = tk.LabelFrame(
@@ -142,11 +114,11 @@ class EnrollUI(BaseFrame):
         self.video_label = tk.Label(
             video_frame,
             bg="#34495e",
-            width=80,
-            height=30,
+            image=self.placeholder_image,
             text="📷 Camera sẽ hiển thị ở đây",
             font=("Arial", 12),
-            fg="white"
+            fg="white",
+            compound="center"
         )
         self.video_label.pack(padx=2, pady=2)
 
@@ -381,91 +353,118 @@ class EnrollUI(BaseFrame):
         for key in self.quality_labels:
             self.update_quality_indicator(key, "inactive")
 
+        # ========== TEST LIVENESS TRÊN FRAME TOÀN BỘ ==========
+        # Chỉ chạy một lần cho toàn bộ frame (high resolution = confidence cao)
+        is_frame_live, frame_conf, frame_label = self.anti_spoof.check_liveness(
+            frame_bgr)
+        print(
+            f"[FRAME LIVENESS] is_live: {is_frame_live}, conf: {frame_conf:.2f}, label: {frame_label}")
+
         if faces:
             face = faces[0]
             l, t, r, b = face.bbox.astype(int)
             w, h = r - l, b - t
 
-            is_distance_ok = False
-            is_confidence_ok = False
-
-            self.update_quality_indicator("face", "good")
-
-            # Distance check
-            if w < self.MIN_FACE_SIZE or h < self.MIN_FACE_SIZE:
-                self.update_quality_indicator("distance", "bad")
-                status_text = "📏 Đưa khuôn mặt lại GẦN camera hơn"
-                status_color = "#e67e22"
-                cv2.rectangle(frame_bgr, (l, t), (r, b), (0, 165, 255), 3)
-            elif w > 400 or h > 400:
-                self.update_quality_indicator("distance", "bad")
-                status_text = "📏 Lùi ra XA camera một chút"
-                status_color = "#e67e22"
-                cv2.rectangle(frame_bgr, (l, t), (r, b), (0, 165, 255), 3)
+            # Nếu frame không live, vẽ cảnh báo và bỏ qua
+            if not is_frame_live:
+                frame_bgr = self.anti_spoof.draw_result(
+                    frame_bgr,
+                    (l, t, r, b),
+                    is_frame_live, frame_conf, frame_label
+                )
+                self.status.config(
+                    text="🚨 Phát hiện khuôn mặt giả mạo!", bg="#e74c3c")
+                self.update_quality_indicator("face", "bad")
             else:
-                self.update_quality_indicator("distance", "good")
-                is_distance_ok = True
+                # ========== CHỈ TIẾP TỤC NẾU FRAME LÀ LIVE ==========
+                is_distance_ok = False
+                is_confidence_ok = False
 
-            # Confidence check
-            if face.det_score < self.MIN_CONFIDENCE:
-                self.update_quality_indicator("confidence", "bad")
-                status_text = f"✨ Ánh sáng chưa đủ ({face.det_score*100:.0f}%)"
-                status_color = "#e67e22"
-                cv2.rectangle(frame_bgr, (l, t), (r, b), (0, 0, 255), 3)
-            else:
-                self.update_quality_indicator("confidence", "good")
-                is_confidence_ok = True
+                self.update_quality_indicator("face", "good")
 
-            # Try to add sample
-            if is_distance_ok and is_confidence_ok:
-                cv2.rectangle(frame_bgr, (l, t), (r, b), (0, 255, 0), 3)
-
-                if self.sample_cooldown <= 0:
-                    ok = self.enroll_mgr.add_frame(frame_rgb)
-
-                    if ok:
-                        count = len(self.enroll_mgr.samples)
-                        self.sample_cooldown = self.SAMPLE_COOLDOWN
-
-                        self.progress["value"] = count
-                        percentage = int((count / self.MAX_SAMPLES) * 100)
-                        self.progress_label.config(
-                            text=f"{count}/{self.MAX_SAMPLES} mẫu ({percentage}%)",
-                            fg="#27ae60"
-                        )
-
-                        status_text = f"✅ Thu thập mẫu {count}/{self.MAX_SAMPLES}"
-                        status_color = "#27ae60"
-                        self.update_quality_indicator("diversity", "good")
-
-                        if self.enroll_mgr.is_complete():
-                            print("\n🎉 Enrollment completed!")
-                            success = self.enroll_mgr.save(
-                                self.student_id, self.name)
-                            if success:
-                                self.show_success_screen()
-                            else:
-                                self.status.config(
-                                    text="❌ Lỗi khi lưu dữ liệu!", bg="#e74c3c")
-                            return
-                    else:
-                        self.update_quality_indicator("diversity", "warning")
-                        status_text = "🔄 Xoay nhẹ đầu sang trái/phải/lên/xuống"
-                        status_color = "#f39c12"
+                # Distance check
+                if w < self.MIN_FACE_SIZE or h < self.MIN_FACE_SIZE:
+                    self.update_quality_indicator("distance", "bad")
+                    status_text = "📏 Đưa khuôn mặt lại GẦN camera hơn"
+                    status_color = "#e67e22"
+                    cv2.rectangle(frame_bgr, (l, t), (r, b), (0, 165, 255), 3)
+                elif w > 400 or h > 400:
+                    self.update_quality_indicator("distance", "bad")
+                    status_text = "📏 Lùi ra XA camera một chút"
+                    status_color = "#e67e22"
+                    cv2.rectangle(frame_bgr, (l, t), (r, b), (0, 165, 255), 3)
                 else:
-                    status_text = f"⏱ Giữ yên ({self.sample_cooldown} frames)..."
-                    status_color = "#3498db"
-                    self.update_quality_indicator("diversity", "warning")
+                    self.update_quality_indicator("distance", "good")
+                    is_distance_ok = True
 
-            cv2.putText(
-                frame_bgr,
-                f"{face.det_score*100:.0f}%",
-                (l, t - 10),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (0, 255, 0) if is_confidence_ok else (0, 0, 255),
-                2
-            )
+                # Confidence check
+                if face.det_score < self.MIN_CONFIDENCE:
+                    self.update_quality_indicator("confidence", "bad")
+                    status_text = f"✨ Ánh sáng chưa đủ ({face.det_score*100:.0f}%)"
+                    status_color = "#e67e22"
+                    cv2.rectangle(frame_bgr, (l, t), (r, b), (0, 0, 255), 3)
+                else:
+                    self.update_quality_indicator("confidence", "good")
+                    is_confidence_ok = True
+
+                # Try to add sample
+                if is_distance_ok and is_confidence_ok:
+                    cv2.rectangle(frame_bgr, (l, t), (r, b), (0, 255, 0), 3)
+
+                    if self.sample_cooldown <= 0:
+                        ok = self.enroll_mgr.add_frame(frame_rgb)
+
+                        if ok:
+                            count = len(self.enroll_mgr.samples)
+                            self.sample_cooldown = self.SAMPLE_COOLDOWN
+
+                            self.progress["value"] = count
+                            percentage = int((count / self.MAX_SAMPLES) * 100)
+                            self.progress_label.config(
+                                text=f"{count}/{self.MAX_SAMPLES} mẫu ({percentage}%)",
+                                fg="#27ae60"
+                            )
+
+                            status_text = f"✅ Thu thập mẫu {count}/{self.MAX_SAMPLES}"
+                            status_color = "#27ae60"
+                            self.update_quality_indicator("diversity", "good")
+
+                            if self.enroll_mgr.is_complete():
+                                print("\n🎉 Enrollment completed!")
+                                success = self.enroll_mgr.save(
+                                    self.student_id, self.name)
+                                if success:
+                                    self.show_success_screen()
+                                    if hasattr(self.controller, 'face_matcher'):
+                                        self.controller.face_matcher.reload()
+                                        print(
+                                            "Đã reload FaceMatcher → có thể điểm danh sinh viên mới ngay lập tức")
+                                    else:
+                                        print(
+                                            "Warning: Controller chưa có face_matcher → restart để cập nhật")
+                                else:
+                                    self.status.config(
+                                        text="❌ Lỗi khi lưu dữ liệu!", bg="#e74c3c")
+                                return
+                        else:
+                            self.update_quality_indicator(
+                                "diversity", "warning")
+                            status_text = "🔄 Xoay nhẹ đầu sang trái/phải/lên/xuống"
+                            status_color = "#f39c12"
+                    else:
+                        status_text = f"⏱ Giữ yên ({self.sample_cooldown} frames)..."
+                        status_color = "#3498db"
+                        self.update_quality_indicator("diversity", "warning")
+
+                cv2.putText(
+                    frame_bgr,
+                    f"{face.det_score*100:.0f}%",
+                    (l, t - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (0, 255, 0) if is_confidence_ok else (0, 0, 255),
+                    2
+                )
 
         else:
             status_text = "👤 Không phát hiện khuôn mặt"
@@ -546,7 +545,7 @@ class EnrollUI(BaseFrame):
             self.btn_home.destroy()
 
         self.video_label.config(
-            image="",
+            image=self.placeholder_image,
             bg="#34495e",
             text="📷 Camera sẽ hiển thị ở đây",
             font=("Arial", 12)
