@@ -48,7 +48,7 @@ class StudentManager:
         except Exception as e:
             print(f"Không backup được: {e}")
 
-        # Lọc bỏ sinh viên
+        # Lọc bỏ nhân viên
         original_count = len(self.students)
         self.students = [s for s in self.students  if str(s["id"]) != str(student_id)]
 

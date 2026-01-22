@@ -341,6 +341,7 @@ class EnrollUI(BaseFrame):
 
         self.frame_count += 1
         frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+        display_frame = frame_bgr.copy()  # dùng để vẽ và hiển thị
 
         faces = []
         if self.frame_count % self.DETECT_INTERVAL == 0:
@@ -353,63 +354,72 @@ class EnrollUI(BaseFrame):
         for key in self.quality_labels:
             self.update_quality_indicator(key, "inactive")
 
-        # ========== TEST LIVENESS TRÊN FRAME TOÀN BỘ ==========
-        # Chỉ chạy một lần cho toàn bộ frame (high resolution = confidence cao)
-        is_frame_live, frame_conf, frame_label = self.anti_spoof.check_liveness(
-            frame_bgr)
-        print(
-            f"[FRAME LIVENESS] is_live: {is_frame_live}, conf: {frame_conf:.2f}, label: {frame_label}")
+        # ========== ANTI-SPOOF: Chạy YOLO detection trên FULL FRAME ==========
+        spoof_info = self.anti_spoof.detect_spoof(frame_bgr)
+        display_frame = self.anti_spoof.draw_results(frame_bgr, spoof_info)
+        has_real = spoof_info['has_real']
 
+        # ========== Xử lý khuôn mặt detect được ==========
         if faces:
-            face = faces[0]
+            face = faces[0]  # giả sử chỉ xử lý 1 mặt trong đăng ký
             l, t, r, b = face.bbox.astype(int)
             w, h = r - l, b - t
 
-            # Nếu frame không live, vẽ cảnh báo và bỏ qua
-            if not is_frame_live:
-                frame_bgr = self.anti_spoof.draw_result(
-                    frame_bgr,
-                    (l, t, r, b),
-                    is_frame_live, frame_conf, frame_label
-                )
-                self.status.config(
-                    text="🚨 Phát hiện khuôn mặt giả mạo!", bg="#e74c3c")
+            # Kiểm tra overlap với box "real" từ YOLO
+            verified_real = False
+            max_real_conf = 0.0
+            for rx1, ry1, rx2, ry2, rconf in spoof_info['real_boxes']:
+                # Overlap đơn giản (có giao nhau đáng kể)
+                if (l < rx2 and r > rx1 and t < ry2 and b > ry1):
+                    verified_real = True
+                    max_real_conf = max(max_real_conf, rconf)
+                    break
+
+            if not verified_real or not has_real:
+                # Không có box real overlap → coi như spoof hoặc không xác thực
+                status_text = "🚨 Phát hiện khả năng giả mạo hoặc không rõ ràng"
+                status_color = "#e74c3c"
                 self.update_quality_indicator("face", "bad")
+                cv2.rectangle(display_frame, (l, t), (r, b), (0, 0, 255), 3)
+                cv2.putText(display_frame, "SPOOF?", (l, t - 25),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
             else:
-                # ========== CHỈ TIẾP TỤC NẾU FRAME LÀ LIVE ==========
+                # Có xác thực real → tiếp tục check chất lượng
+                self.update_quality_indicator("face", "good")
+
                 is_distance_ok = False
                 is_confidence_ok = False
-
-                self.update_quality_indicator("face", "good")
 
                 # Distance check
                 if w < self.MIN_FACE_SIZE or h < self.MIN_FACE_SIZE:
                     self.update_quality_indicator("distance", "bad")
                     status_text = "📏 Đưa khuôn mặt lại GẦN camera hơn"
                     status_color = "#e67e22"
-                    cv2.rectangle(frame_bgr, (l, t), (r, b), (0, 165, 255), 3)
+                    cv2.rectangle(display_frame, (l, t), (r, b), (0, 165, 255), 3)
                 elif w > 400 or h > 400:
                     self.update_quality_indicator("distance", "bad")
                     status_text = "📏 Lùi ra XA camera một chút"
                     status_color = "#e67e22"
-                    cv2.rectangle(frame_bgr, (l, t), (r, b), (0, 165, 255), 3)
+                    cv2.rectangle(display_frame, (l, t), (r, b), (0, 165, 255), 3)
                 else:
                     self.update_quality_indicator("distance", "good")
                     is_distance_ok = True
 
-                # Confidence check
+                # Confidence check (từ face detector)
                 if face.det_score < self.MIN_CONFIDENCE:
                     self.update_quality_indicator("confidence", "bad")
                     status_text = f"✨ Ánh sáng chưa đủ ({face.det_score*100:.0f}%)"
                     status_color = "#e67e22"
-                    cv2.rectangle(frame_bgr, (l, t), (r, b), (0, 0, 255), 3)
+                    cv2.rectangle(display_frame, (l, t), (r, b), (0, 0, 255), 3)
                 else:
                     self.update_quality_indicator("confidence", "good")
                     is_confidence_ok = True
 
-                # Try to add sample
+                # Chỉ thu thập sample khi tất cả OK
                 if is_distance_ok and is_confidence_ok:
-                    cv2.rectangle(frame_bgr, (l, t), (r, b), (0, 255, 0), 3)
+                    cv2.rectangle(display_frame, (l, t), (r, b), (0, 255, 0), 3)
+                    cv2.putText(display_frame, f"REAL {max_real_conf:.2f}", (l, t - 25),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
                     if self.sample_cooldown <= 0:
                         ok = self.enroll_mgr.add_frame(frame_rgb)
@@ -431,24 +441,19 @@ class EnrollUI(BaseFrame):
 
                             if self.enroll_mgr.is_complete():
                                 print("\n🎉 Enrollment completed!")
-                                success = self.enroll_mgr.save(
-                                    self.student_id, self.name)
+                                success = self.enroll_mgr.save(self.student_id, self.name)
                                 if success:
                                     self.show_success_screen()
                                     if hasattr(self.controller, 'face_matcher'):
                                         self.controller.face_matcher.reload()
-                                        print(
-                                            "Đã reload FaceMatcher → có thể chấm công nhân viên mới ngay lập tức")
+                                        print("Đã reload FaceMatcher")
                                     else:
-                                        print(
-                                            "Warning: Controller chưa có face_matcher → restart để cập nhật")
+                                        print("Warning: Controller chưa có face_matcher")
                                 else:
-                                    self.status.config(
-                                        text="❌ Lỗi khi lưu dữ liệu!", bg="#e74c3c")
+                                    self.status.config(text="❌ Lỗi khi lưu dữ liệu!", bg="#e74c3c")
                                 return
                         else:
-                            self.update_quality_indicator(
-                                "diversity", "warning")
+                            self.update_quality_indicator("diversity", "warning")
                             status_text = "🔄 Xoay nhẹ đầu sang trái/phải/lên/xuống"
                             status_color = "#f39c12"
                     else:
@@ -456,15 +461,13 @@ class EnrollUI(BaseFrame):
                         status_color = "#3498db"
                         self.update_quality_indicator("diversity", "warning")
 
-                cv2.putText(
-                    frame_bgr,
-                    f"{face.det_score*100:.0f}%",
-                    (l, t - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.7,
-                    (0, 255, 0) if is_confidence_ok else (0, 0, 255),
-                    2
-                )
+                cv2.putText(display_frame,
+                            f"{face.det_score*100:.0f}%",
+                            (l, t - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.7,
+                            (0, 255, 0) if is_confidence_ok else (0, 0, 255),
+                            2)
 
         else:
             status_text = "👤 Không phát hiện khuôn mặt"
@@ -478,7 +481,7 @@ class EnrollUI(BaseFrame):
             self.status.config(text=status_text, bg=status_color)
 
         # Display frame
-        img = Image.fromarray(cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB))
+        img = Image.fromarray(cv2.cvtColor(display_frame, cv2.COLOR_BGR2RGB))
         img = img.resize((640, 480), Image.Resampling.LANCZOS)
         self.photo_image = ImageTk.PhotoImage(img)
         self.video_label.config(image=self.photo_image, text="")

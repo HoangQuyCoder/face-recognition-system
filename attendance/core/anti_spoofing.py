@@ -1,16 +1,13 @@
 import os
 import cv2
-import math
 from ultralytics import YOLO
 
 
 class AntiSpoofing:
     """
-    Class xử lý anti-spoofing (liveness detection) bằng YOLO model.
-
-    Cách dùng:
-        anti_spoof = AntiSpoofing(model_path="models/best.pt", conf_threshold=0.8)
-        is_live, confidence, label = anti_spoof.check_liveness(face_crop_bgr)
+    Class xử lý anti-spoofing bằng YOLO (detection-based).
+    - Dùng chung cho enrollment & attendance.
+    - Trả về danh sách detections để linh hoạt xử lý.
     """
 
     _instance = None
@@ -22,7 +19,7 @@ class AntiSpoofing:
 
     def __init__(self,
                  model_path=None,
-                 conf_threshold=0.7,  # 0.8
+                 conf_threshold=0.85,  # có thể điều chỉnh 0.75-0.85
                  classes=["fake", "real"]):
 
         if hasattr(self, "_initialized") and self._initialized:
@@ -32,89 +29,102 @@ class AntiSpoofing:
         self.conf_threshold = conf_threshold
         self.classes = classes
 
-        # ====== RESOLVE MODEL PATH CHUẨN ======
+        # Resolve model path (giữ nguyên logic cũ của bạn)
         if model_path is None:
-            BASE_DIR = os.path.dirname(
-                os.path.abspath(__file__))   # attendance/core
+            BASE_DIR = os.path.dirname(os.path.abspath(__file__))
             PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, "..", ".."))
-            model_path = os.path.join(
-                PROJECT_ROOT,
-                "anti-spoofing",
-                "models",
-                "best.pt"
-            )
+            model_path = os.path.join(PROJECT_ROOT, "anti-spoofing", "models", "best.pt")
 
         model_path = os.path.abspath(model_path)
         self.model_path = model_path
 
-        print("[AntiSpoofing] Model path resolved to:")
-        print(" ", model_path)
-
         if not os.path.exists(model_path):
-            raise FileNotFoundError(
-                f"Không tìm thấy model anti-spoofing tại:\n{model_path}"
-            )
+            raise FileNotFoundError(f"Không tìm thấy model tại: {model_path}")
 
         self.model = YOLO(model_path)
-        print("[AntiSpoofing] Model loaded successfully")
+        print("[AntiSpoofing] Model loaded:", model_path)
 
-    def check_liveness(self, face_crop_bgr):
+    def detect_spoof(self, img_bgr):
         """
-        Kiểm tra khuôn mặt có phải thật (live) hay không.
-
-        Args:
-            face_crop_bgr (np.ndarray): Ảnh khuôn mặt crop ở định dạng BGR (từ cv2)
+        Chạy YOLO detection trên full frame.
+        Trả về danh sách detections + tóm tắt.
 
         Returns:
-            tuple: (is_live: bool, confidence: float, label: str)
-                - is_live: True nếu là khuôn mặt thật (real/live)
-                - confidence: confidence cao nhất
-                - label: "real" hoặc "fake"
+            dict {
+                'detections': list of dicts [{'bbox': (x1,y1,x2,y2), 'conf': float, 'label': str, 'class_id': int}],
+                'has_real': bool,
+                'max_real_conf': float,
+                'real_boxes': list of (x1,y1,x2,y2,conf),
+                'fake_boxes': list of (x1,y1,x2,y2,conf)
+            }
         """
-        if face_crop_bgr is None or face_crop_bgr.size == 0:
-            return False, 0.0, "invalid"
+        results = self.model(img_bgr, stream=True, verbose=False)
 
-        # Chạy inference
-        results = self.model(face_crop_bgr, stream=True, verbose=False)
-
-        max_conf = 0.0
-        best_label = "fake"
+        detections = []
+        real_boxes = []
+        fake_boxes = []
+        max_real_conf = 0.0
 
         for r in results:
             boxes = r.boxes
             for box in boxes:
                 conf = float(box.conf[0])
+                if conf < self.conf_threshold:
+                    continue
+
                 cls_id = int(box.cls[0])
-                if conf > max_conf:
-                    max_conf = conf
-                    best_label = self.classes[cls_id]
+                label = self.classes[cls_id]
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
 
-        is_live = (best_label == "real") and (max_conf >= self.conf_threshold)
+                det = {
+                    'bbox': (x1, y1, x2, y2),
+                    'conf': conf,
+                    'label': label,
+                    'class_id': cls_id
+                }
+                detections.append(det)
 
-        return is_live, max_conf, best_label
+                if label == "real":
+                    real_boxes.append((x1, y1, x2, y2, conf))
+                    max_real_conf = max(max_real_conf, conf)
+                else:
+                    fake_boxes.append((x1, y1, x2, y2, conf))
 
-    def draw_result(self, img_bgr, bbox, is_live, conf, label):
+        has_real = len(real_boxes) > 0
+
+        return {
+            'detections': detections,
+            'has_real': has_real,
+            'max_real_conf': max_real_conf,
+            'real_boxes': real_boxes,
+            'fake_boxes': fake_boxes
+        }
+
+    def draw_results(self, img_bgr, detections_info, thickness=2, text_scale=0.7):
         """
-        Vẽ kết quả lên ảnh (dùng để debug hoặc hiển thị realtime)
+        Vẽ tất cả detections lên ảnh (real xanh, fake đỏ).
+        Trả về ảnh đã vẽ.
 
         Args:
-            img_bgr (np.ndarray): Ảnh gốc
-            bbox (tuple): (left, top, right, bottom)
-            is_live, conf, label: kết quả từ check_liveness
+            img_bgr: ảnh gốc
+            detections_info: dict từ detect_spoof()
+            thickness, text_scale: điều chỉnh visual
 
         Returns:
             img_bgr đã vẽ
         """
-        left, top, right, bottom = bbox
-        if is_live:
-            color = (0, 255, 0)
-            text = f"REAL {conf:.2f}"
-        else:
-            color = (0, 0, 255)
-            text = f"SPOOF {conf:.2f}"
+        img = img_bgr.copy()
 
-        cv2.rectangle(img_bgr, (left, top), (right, bottom), color, 2)
-        cv2.putText(img_bgr, text, (left, top - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+        for det in detections_info['detections']:
+            x1, y1, x2, y2 = det['bbox']
+            conf = det['conf']
+            label = det['label']
 
-        return img_bgr
+            color = (0, 255, 0) if label == "real" else (0, 0, 255)
+            cv2.rectangle(img, (x1, y1), (x2, y2), color, thickness)
+
+            text = f"{label.upper()} {conf:.2f}"
+            cv2.putText(img, text, (x1, max(y1 - 10, 10)),
+                        cv2.FONT_HERSHEY_SIMPLEX, text_scale, color, max(thickness-1, 1))
+
+        return img

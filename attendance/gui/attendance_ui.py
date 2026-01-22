@@ -18,7 +18,7 @@ class AttendanceUI(BaseFrame):
     # ================= CONFIG =================
     SIMILARITY_THRESHOLD = 0.45
     COOLDOWN_MAX = 60
-    DETECT_INTERVAL = 2  
+    DETECT_INTERVAL = 5
 
     # =========================================
     def __init__(self, parent, controller):
@@ -43,7 +43,7 @@ class AttendanceUI(BaseFrame):
         self.app = InsightFaceSingleton.get_instance(
             name="buffalo_l",
             providers=["CPUExecutionProvider"],
-            det_size=(480, 480),  
+            det_size=(480, 480),
             ctx_id=0
         )
 
@@ -391,7 +391,7 @@ class AttendanceUI(BaseFrame):
             self.attendance_text.config(state="normal")
             self.attendance_text.delete("1.0", tk.END)
             self.attendance_text.config(state="disabled")
-            self.total_label.config(text="0 sinh viên")
+            self.total_label.config(text="0 nhân viên")
 
             self.status.config(
                 text=f"🎥 Đang chấm công - Phiên: {self.current_course} (Session {self.current_session_id})",
@@ -424,80 +424,99 @@ class AttendanceUI(BaseFrame):
 
         self.frame_count += 1
         frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+        display_frame = frame_bgr.copy()  # frame để vẽ và hiển thị
 
+        # Face detection + embedding (giữ nguyên)
         faces = []
         if self.frame_count % self.DETECT_INTERVAL == 0:
             small = cv2.resize(frame_rgb, None, fx=0.75, fy=0.75)
             faces = self.app.get(small)
 
-        # ========== TEST LIVENESS TRÊN FRAME TOÀN BỘ ==========
-        # Chỉ chạy một lần cho toàn bộ frame (high resolution = confidence cao)
-        is_frame_live, frame_conf, frame_label = self.anti_spoof.check_liveness(
-            frame_bgr)
-        print(
-            f"[FRAME LIVENESS] is_live: {is_frame_live}, conf: {frame_conf:.2f}, label: {frame_label}")
+        # ========== ANTI-SPOOF: Chạy YOLO detection trên FULL FRAME ==========
+        spoof_info = self.anti_spoof.detect_spoof(frame_bgr)
+        display_frame = self.anti_spoof.draw_results(frame_bgr, spoof_info)
 
-        # ========== CHỈ MATCH NẾU FRAME LÀ LIVE ==========
-        for face in faces:
-            bbox = (face.bbox * (1 / 0.75)).astype(int)
-            left, top, right, bottom = bbox
+        has_real = spoof_info['has_real']
+        real_boxes = spoof_info['real_boxes']
 
-            embedding = face.normed_embedding
-            if embedding is None:
-                continue
+        # ========== Logic chấm công ==========
+        attendance_success = False
 
-            # Nếu frame không live, vẽ cảnh báo và bỏ qua tất cả
-            if not is_frame_live:
-                frame_bgr = self.anti_spoof.draw_result(
-                    frame_bgr,
-                    (left, top, right, bottom),
-                    is_frame_live, frame_conf, frame_label
-                )
-                self.status.config(
-                    text="🚨 Phát hiện khuôn mặt giả mạo!", bg="#e74c3c")
-                continue
+        if has_real:
+            # Có ít nhất một box "real" → có khả năng là người thật
+            for face in faces:
+                bbox_scaled = (face.bbox * (1 / 0.75)).astype(int)
+                f_left, f_top, f_right, f_bottom = bbox_scaled
 
-            # ========== MATCH FACE CROP ==========
-            student_id, name, similarity = self.matcher.match(embedding)
+                # Kiểm tra overlap với ít nhất một box "real" từ YOLO
+                verified = False
+                max_real_conf = 0.0
+                for rx1, ry1, rx2, ry2, rconf in real_boxes:
+                    # Overlap đơn giản (có giao nhau đáng kể)
+                    if (f_left < rx2 and f_right > rx1 and
+                            f_top < ry2 and f_bottom > ry1):
+                        verified = True
+                        max_real_conf = max(max_real_conf, rconf)
+                        break  # chỉ cần overlap 1 cái là đủ
 
-            if student_id and similarity >= self.SIMILARITY_THRESHOLD:
-                color = (0, 255, 0)
-                label = f"{name} ({similarity:.2f})"
+                if verified and face.normed_embedding is not None:
+                    student_id, name, similarity = self.matcher.match(
+                        face.normed_embedding)
 
-                if self.cooldown_frames <= 0 and student_id not in self.marked_ids and self.current_session_id is not None:
-                    if self.attendance_db.mark_attendance(
-                        session_id=self.current_session_id,
-                        student_id=student_id,
-                        status="present"
-                    ):
-                        self.marked_ids.add(student_id)
-                        self.cooldown_frames = self.COOLDOWN_MAX
+                    if student_id and similarity >= self.SIMILARITY_THRESHOLD:
+                        color = (0, 255, 0)
+                        label_text = f"{name} ({similarity:.2f})"
 
-                        # Add to log display
-                        self.add_attendance_log(student_id, name, similarity)
+                        if (self.cooldown_frames <= 0 and
+                            student_id not in self.marked_ids and
+                                self.current_session_id is not None):
 
-                        self.status.config(
-                            text=f"✅ Chấm công: {name} (Session {self.current_session_id})",
-                            bg="#27ae60"
-                        )
-                        print(
-                            f"Marked in session {self.current_session_id}: {name}")
-            else:
-                color = (0, 0, 255)
-                label = "Unknown"
+                            if self.attendance_db.mark_attendance(
+                                session_id=self.current_session_id,
+                                student_id=student_id,
+                                status="present"
+                            ):
+                                self.marked_ids.add(student_id)
+                                self.cooldown_frames = self.COOLDOWN_MAX
+                                self.add_attendance_log(
+                                    student_id, name, similarity)
 
-            cv2.rectangle(frame_bgr, (left, top),
-                          (right, bottom), color, 2)
-            cv2.putText(frame_bgr, label,
-                        (left, top - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7, color, 2)
+                                self.status.config(
+                                    text=f"✅ Chấm công: {name} (Session {self.current_session_id})",
+                                    bg="#27ae60"
+                                )
+                                print(
+                                    f"Marked: {name} in session {self.current_session_id}")
+                                attendance_success = True
+                    else:
+                        label_text = "Unknown"
+                        color = (0, 165, 255)  # vàng cho unknown
 
+                    # Vẽ box từ face detector
+                    cv2.rectangle(display_frame, (f_left, f_top), (f_right, f_bottom),
+                                  color, 2)
+                    cv2.putText(display_frame, label_text, (f_left, max(f_top - 10, 10)),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+
+        # ========== Status tổng ==========
+        if attendance_success:
+            pass  # đã set ở trên
+        elif has_real:
+            self.status.config(
+                text="✅ Khuôn mặt thật – đang kiểm tra danh tính", bg="#3498db")
+        elif len(real_boxes) == 0 and len(faces) > 0:
+            self.status.config(
+                text="🚨 Có thể là giả mạo hoặc chất lượng thấp", bg="#e74c3c")
+        else:
+            self.status.config(
+                text="Đang chờ phát hiện khuôn mặt...", bg="#7f8c8d")
+
+        # Cooldown countdown
         if self.cooldown_frames > 0:
             self.cooldown_frames -= 1
 
-        # Display frame
-        img = Image.fromarray(cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB))
+        # ========== Hiển thị frame (giữ nguyên) ==========
+        img = Image.fromarray(cv2.cvtColor(display_frame, cv2.COLOR_BGR2RGB))
         img = img.resize((640, 480), Image.Resampling.LANCZOS)
         self.photo_image = ImageTk.PhotoImage(img)
         self.video_label.config(image=self.photo_image, text="")
@@ -523,7 +542,7 @@ class AttendanceUI(BaseFrame):
         total = len(self.marked_ids)
         session_text = f" (Session {self.current_session_id})" if self.current_session_id else ""
         self.status.config(
-            text=f"⏸ Đã dừng. Tổng: {total} sinh viên{session_text}",
+            text=f"⏸ Đã dừng. Tổng: {total} nhân viên{session_text}",
             bg="#3498db"
         )
 
