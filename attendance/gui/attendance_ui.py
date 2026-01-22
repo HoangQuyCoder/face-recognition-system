@@ -26,7 +26,7 @@ class AttendanceUI(BaseFrame):
         self.config(bg="#f5f5f5")
 
         self.current_session_id = None
-        self.current_course = "Lớp mặc định"
+        self.current_course = "Mặc định"
 
         # Setup UI
         self.setup_ui()
@@ -65,7 +65,7 @@ class AttendanceUI(BaseFrame):
 
         content = create_scrollable_page(
             parent=self,
-            title_text="✅ ĐIỂM DANH SINH VIÊN"
+            title_text="✅ CHẤM CÔNG NHÂN VIÊN"
         )
 
         # tk.Label(
@@ -77,7 +77,7 @@ class AttendanceUI(BaseFrame):
 
         session_frame = tk.LabelFrame(
             content,
-            text=" Chọn hoặc tạo buổi học ",
+            text=" Chọn hoặc tạo phiên ",
             font=("Arial", 12, "bold"),
             bg="white",
             fg="#2c3e50",
@@ -89,7 +89,7 @@ class AttendanceUI(BaseFrame):
         # Row 1: Chọn session hiện có
         tk.Label(
             session_frame,
-            text="Buổi học:",
+            text="Phiên:",
             font=("Arial", 11),
             bg="white"
         ).grid(row=0, column=0, sticky="e", padx=10, pady=10)
@@ -125,7 +125,7 @@ class AttendanceUI(BaseFrame):
         )
         self.new_course_entry.grid(
             row=1, column=1, padx=10, pady=10, sticky="ew")
-        self.new_course_entry.insert(0, "Nhập tên môn học / lớp học...")
+        self.new_course_entry.insert(0, "Nhập tên phòng ban...")
 
         tk.Button(
             session_frame,
@@ -167,7 +167,7 @@ class AttendanceUI(BaseFrame):
         # Attendance List
         list_frame = tk.LabelFrame(
             info_container,
-            text="  📋 Danh sách điểm danh  ",
+            text="  📋 Danh sách chấm công  ",
             font=("Arial", 11, "bold"),
             bg="white",
             fg="#2c3e50",
@@ -214,7 +214,7 @@ class AttendanceUI(BaseFrame):
 
         self.total_label = tk.Label(
             stats_grid,
-            text="0 sinh viên",
+            text="0 nhân viên",
             font=("Arial", 10),
             bg="white",
             fg="#27ae60"
@@ -225,7 +225,7 @@ class AttendanceUI(BaseFrame):
         # ========= STATUS =========
         self.status = tk.Label(
             content,
-            text="✋ Nhấn 'Bắt đầu' để bắt đầu điểm danh",
+            text="✋ Nhấn 'Bắt đầu' để bắt đầu chấm công",
             font=("Arial", 11),
             fg="white",
             bg="#3498db",
@@ -295,7 +295,7 @@ class AttendanceUI(BaseFrame):
 
         # Update total count
         total = len(self.marked_ids)
-        self.total_label.config(text=f"{total} sinh viên")
+        self.total_label.config(text=f"{total} nhân viên")
 
     def load_sessions(self):
         """Tải danh sách session từ DB (ưu tiên session chưa kết thúc)"""
@@ -319,13 +319,13 @@ class AttendanceUI(BaseFrame):
                 self.session_combo.current(0)
                 self.on_session_selected(None)  # tự động chọn cái đầu
             else:
-                self.session_combo.set("Chưa có buổi học nào")
+                self.session_combo.set("Chưa có phiên nào")
                 self.current_session_id = None
                 self.current_course = None
 
         except Exception as e:
             messagebox.showerror(
-                "Lỗi", f"Không tải được danh sách buổi học\n{e}")
+                "Lỗi", f"Không tải được danh sách phiên chấm\n{e}")
             self.session_combo.set("Lỗi tải dữ liệu")
 
     def on_session_selected(self, event):
@@ -334,15 +334,15 @@ class AttendanceUI(BaseFrame):
             self.current_session_id = self.session_map[selected]
             self.current_course = selected.split(" - ")[0].strip()
             self.status.config(
-                text=f"Đã chọn: {selected}\nNhấn 'Bắt đầu' để điểm danh",
+                text=f"Đã chọn: {selected}\nNhấn 'Bắt đầu' để chấm công",
                 bg="#3498db"
             )
 
     def create_and_select_session(self):
         course_name = self.new_course_entry.get().strip()
-        if not course_name or course_name == "Nhập tên môn học / lớp học...":
+        if not course_name or course_name == "Nhập tên phòng ban...":
             messagebox.showwarning(
-                "Cảnh báo", "Vui lòng nhập tên môn học / lớp học")
+                "Cảnh báo", "Vui lòng nhập tên phòng ban")
             self.new_course_entry.focus_set()
             return
 
@@ -353,7 +353,7 @@ class AttendanceUI(BaseFrame):
                 end_time=datetime.now() + timedelta(hours=2)  # mặc định 2 tiếng
             )
             messagebox.showinfo(
-                "Thành công", f"Đã tạo buổi học:\n{course_name}\nID: {session_id}")
+                "Thành công", f"Đã tạo phiên:\n{course_name}\nID: {session_id}")
 
             self.current_session_id = session_id
             self.current_course = course_name
@@ -372,14 +372,14 @@ class AttendanceUI(BaseFrame):
             )
 
         except Exception as e:
-            messagebox.showerror("Lỗi", f"Không tạo được buổi học\n{e}")
+            messagebox.showerror("Lỗi", f"Không tạo được phiên\n{e}")
 
     # =====================================================
     def start(self):
         try:
             if self.current_session_id is None:
                 messagebox.showwarning(
-                    "Cảnh báo", "Vui lòng chọn hoặc tạo buổi học trước!")
+                    "Cảnh báo", "Vui lòng chọn hoặc tạo phiên trước!")
                 return
             self.camera = Camera()
             self.running = True
@@ -394,7 +394,7 @@ class AttendanceUI(BaseFrame):
             self.total_label.config(text="0 sinh viên")
 
             self.status.config(
-                text=f"🎥 Đang điểm danh - Buổi: {self.current_course} (Session {self.current_session_id})",
+                text=f"🎥 Đang chấm công - Phiên: {self.current_course} (Session {self.current_session_id})",
                 bg="#27ae60"
             )
             self.btn_start.config(state="disabled")
@@ -477,7 +477,7 @@ class AttendanceUI(BaseFrame):
                         self.add_attendance_log(student_id, name, similarity)
 
                         self.status.config(
-                            text=f"✅ Điểm danh: {name} (Session {self.current_session_id})",
+                            text=f"✅ Chấm công: {name} (Session {self.current_session_id})",
                             bg="#27ae60"
                         )
                         print(

@@ -53,7 +53,7 @@ class StudentManager:
         self.students = [s for s in self.students  if str(s["id"]) != str(student_id)]
 
         if len(self.students) == original_count:
-            print("❌ Không tìm thấy sinh viên để xóa")
+            print("❌ Không tìm thấy nhân viên để xóa")
             return False
         
         # Ghi đè file

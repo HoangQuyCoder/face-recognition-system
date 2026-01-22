@@ -61,7 +61,7 @@ class EnrollUI(BaseFrame):
 
         content = create_scrollable_page(
             parent=self,
-            title_text="📋 ĐĂNG KÝ SINH VIÊN"
+            title_text="📋 ĐĂNG KÝ NHÂN VIÊN"
         )
 
         # tk.Label(
@@ -74,7 +74,7 @@ class EnrollUI(BaseFrame):
         # ========= FORM =========
         form_frame = tk.LabelFrame(
             content,
-            text="  Thông tin sinh viên  ",
+            text="  Thông tin nhân viên  ",
             font=("Arial", 11, "bold"),
             bg="white",
             fg="#2c3e50",
@@ -87,7 +87,7 @@ class EnrollUI(BaseFrame):
         form_grid = tk.Frame(form_frame, bg="white")
         form_grid.pack(padx=20, pady=15)
 
-        tk.Label(form_grid, text="Mã SV:", bg="white", font=("Arial", 10)).grid(
+        tk.Label(form_grid, text="Mã NV:", bg="white", font=("Arial", 10)).grid(
             row=0, column=0, sticky="e", padx=(0, 10), pady=8
         )
         tk.Label(form_grid, text="Họ tên:", bg="white", font=("Arial", 10)).grid(
@@ -294,7 +294,7 @@ class EnrollUI(BaseFrame):
 
         if not self.student_id or not self.name:
             self.status.config(
-                text="⚠️ Vui lòng nhập đầy đủ Mã SV và Họ tên!",
+                text="⚠️ Vui lòng nhập đầy đủ Mã NV và Họ tên!",
                 bg="#e74c3c"
             )
             return
@@ -438,7 +438,7 @@ class EnrollUI(BaseFrame):
                                     if hasattr(self.controller, 'face_matcher'):
                                         self.controller.face_matcher.reload()
                                         print(
-                                            "Đã reload FaceMatcher → có thể điểm danh sinh viên mới ngay lập tức")
+                                            "Đã reload FaceMatcher → có thể chấm công nhân viên mới ngay lập tức")
                                     else:
                                         print(
                                             "Warning: Controller chưa có face_matcher → restart để cập nhật")

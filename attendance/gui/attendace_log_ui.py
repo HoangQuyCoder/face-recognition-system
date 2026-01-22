@@ -7,11 +7,11 @@ from database.db_connection import DBConnection
 
 
 class AttendanceLogWindow(tk.Toplevel):
-    """Cửa sổ xem lịch sử điểm danh từ SQLite"""
+    """Cửa sổ xem lịch sử chấm công từ SQLite"""
 
     def __init__(self, parent):
         super().__init__(parent)
-        self.title("📝 Lịch sử điểm danh")
+        self.title("📝 Lịch sử chấm công")
         self.geometry("1300x700")
         self.resizable(True, True)
         self.minsize(1000, 600)
@@ -30,7 +30,7 @@ class AttendanceLogWindow(tk.Toplevel):
                                 relief="solid", borderwidth=2)
         header_frame.pack(fill="x", padx=0, pady=0)
 
-        tk.Label(header_frame, text="📝 LỊCH SỬ ĐIỂM DANH",
+        tk.Label(header_frame, text="📝 LỊCH SỬ CHẤM CÔNG",
                  font=("Arial", 18, "bold"), bg=self.bg_header,
                  fg=self.fg_header).pack(pady=15, padx=15)
 
@@ -69,7 +69,7 @@ class AttendanceLogWindow(tk.Toplevel):
         right_frame = tk.Frame(filter_frame, bg=self.bg_main)
         right_frame.pack(side="right", padx=10, pady=10)
 
-        tk.Label(right_frame, text="🔎 Tìm Mã SV:", font=("Arial", 10),
+        tk.Label(right_frame, text="🔎 Tìm Mã NV:", font=("Arial", 10),
                  bg=self.bg_main).pack(side="left", padx=(0, 5))
 
         self.search_entry = tk.Entry(right_frame, width=20, font=("Arial", 10),
@@ -91,18 +91,18 @@ class AttendanceLogWindow(tk.Toplevel):
         tree_frame = tk.Frame(self, bg=self.bg_main)
         tree_frame.pack(fill="both", expand=True, padx=15, pady=(0, 15))
 
-        columns = ("Mã SV", "Thời gian",
+        columns = ("Mã NV", "Thời gian",
                    "Ngày", "Trạng thái", "Session")
         self.tree = ttk.Treeview(
             tree_frame, columns=columns, show="headings")
 
-        self.tree.heading("Mã SV", text="🆔 Mã SV")
+        self.tree.heading("Mã NV", text="🆔 Mã NV")
         self.tree.heading("Thời gian", text="🕐 Thời gian")
         self.tree.heading("Ngày", text="📅 Ngày")
         self.tree.heading("Trạng thái", text="✅ Trạng thái")
         self.tree.heading("Session", text="📋 Session")
 
-        self.tree.column("Mã SV", width=100, anchor="center")
+        self.tree.column("Mã NV", width=100, anchor="center")
         self.tree.column("Thời gian", width=100, anchor="center")
         self.tree.column("Ngày", width=120, anchor="center")
         self.tree.column("Trạng thái", width=100, anchor="center")
@@ -218,7 +218,7 @@ class AttendanceLogWindow(tk.Toplevel):
 
         if not logs:
             self.tree.insert("", "end", tags=("oddrow",), values=(
-                "", "", "Chưa có điểm danh nào trong ngày này", "", "", ""))
+                "", "", "Chưa có chấm công nào trong ngày này", "", "", ""))
 
         self.update_stats(logs)
 
@@ -238,7 +238,7 @@ class AttendanceLogWindow(tk.Toplevel):
 
         if not logs:
             self.tree.insert("", "end", tags=("oddrow",), values=(
-                "", "", "Chưa có lịch sử điểm danh", "", "", ""))
+                "", "", "Chưa có lịch sử chấm công", "", "", ""))
 
         self.update_stats(logs)
 
@@ -268,8 +268,8 @@ class AttendanceLogWindow(tk.Toplevel):
         file_path = filedialog.asksaveasfilename(
             defaultextension=".csv",
             filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
-            initialfile=f"lich_su_diem_danh_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-            title="💾 Xuất lịch sử điểm danh"
+            initialfile=f"lich_su_cham_cong_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            title="💾 Xuất lịch sử chấm công"
         )
         if not file_path:
             return
@@ -277,7 +277,7 @@ class AttendanceLogWindow(tk.Toplevel):
         try:
             with open(file_path, "w", newline="", encoding="utf-8-sig") as f:
                 writer = csv.writer(f)
-                writer.writerow(["Mã SV", "Thời gian",
+                writer.writerow(["Mã NV", "Thời gian",
                                 "Ngày", "Trạng thái", "Session"])
                 for log in self.all_logs:
                     time_str = datetime.fromisoformat(

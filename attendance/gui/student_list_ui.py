@@ -10,7 +10,7 @@ class StudentListWindow(tk.Toplevel):
 
     def __init__(self, parent, controller=None):
         super().__init__(parent)
-        self.title("📋 Danh sách sinh viên đã đăng ký")
+        self.title("📋 Danh sách nhân viên đã đăng ký")
         self.geometry("1200x700")
         self.resizable(True, True)
         self.minsize(1000, 600)
@@ -31,7 +31,7 @@ class StudentListWindow(tk.Toplevel):
                                 relief="solid", borderwidth=2)
         header_frame.pack(fill="x", padx=0, pady=0)
 
-        tk.Label(header_frame, text="📋 DANH SÁCH SINH VIÊN",
+        tk.Label(header_frame, text="📋 DANH SÁCH NHÂN VIÊN",
                  font=("Arial", 18, "bold"), bg=self.bg_header,
                  fg=self.fg_header).pack(pady=15, padx=15)
 
@@ -65,18 +65,18 @@ class StudentListWindow(tk.Toplevel):
         tree_frame = tk.Frame(self, bg=self.bg_main)
         tree_frame.pack(fill="both", expand=True, padx=15, pady=(0, 15))
 
-        columns = ("Mã SV", "Họ tên", "Số mẫu", "Quality", "Ngày đăng ký")
+        columns = ("Mã NV", "Họ tên", "Số mẫu", "Quality", "Ngày đăng ký")
         self.tree = ttk.Treeview(
             tree_frame, columns=columns, show="headings")
 
         # Configure columns
-        self.tree.heading("Mã SV", text="🆔 Mã SV")
+        self.tree.heading("Mã NV", text="🆔 Mã NV")
         self.tree.heading("Họ tên", text="👤 Họ tên")
         self.tree.heading("Số mẫu", text="📸 Mẫu")
         self.tree.heading("Quality", text="⭐ Quality")
         self.tree.heading("Ngày đăng ký", text="📅 Ngày đăng ký")
 
-        self.tree.column("Mã SV", width=120, anchor="center")
+        self.tree.column("Mã NV", width=120, anchor="center")
         self.tree.column("Họ tên", width=250)
         self.tree.column("Số mẫu", width=80, anchor="center")
         self.tree.column("Quality", width=120, anchor="center")
@@ -127,7 +127,7 @@ class StudentListWindow(tk.Toplevel):
         self.btn_refresh.pack(side="left", padx=5)
 
         self.btn_delete = tk.Button(
-            btn_frame, text="🗑️ Xóa sinh viên", bg="#e74c3c", fg="white",
+            btn_frame, text="🗑️ Xóa nhân viên", bg="#e74c3c", fg="white",
             font=("Arial", 10, "bold"), relief="raised", activebackground="#c0392b",
             command=self.delete_selected, padx=15, pady=8)
         self.btn_delete.pack(side="left", padx=5)
@@ -203,7 +203,7 @@ class StudentListWindow(tk.Toplevel):
         self.tree.tag_configure("evenrow", background="#ffffff")
 
     def export_csv(self):
-        """Export danh sách sinh viên ra CSV"""
+        """Export danh sách nhân viên ra CSV"""
         if not self.all_students:
             messagebox.showwarning("Cảnh báo", "Không có dữ liệu để export!")
             return
@@ -211,7 +211,7 @@ class StudentListWindow(tk.Toplevel):
         file_path = filedialog.asksaveasfilename(
             defaultextension=".csv",
             filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
-            initialfile=f"danh_sach_sinh_vien_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            initialfile=f"danh_sach_nhan_vien_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         )
 
         if not file_path:
@@ -222,7 +222,7 @@ class StudentListWindow(tk.Toplevel):
                 writer = csv.writer(f)
                 # Header
                 writer.writerow(
-                    ['Mã SV', 'Họ tên', 'Số mẫu đăng ký', 'Quality Score', 'Ngày đăng ký'])
+                    ['Mã NV', 'Họ tên', 'Số mẫu đăng ký', 'Quality Score', 'Ngày đăng ký'])
                 # Data
                 for student in self.all_students:
                     writer.writerow([
@@ -242,7 +242,7 @@ class StudentListWindow(tk.Toplevel):
         selected = self.tree.selection()
         if not selected:
             messagebox.showwarning(
-                "Cảnh báo", "Vui lòng chọn một sinh viên để xóa!")
+                "Cảnh báo", "Vui lòng chọn một nhân viên để xóa!")
             return
 
         values = self.tree.item(selected[0])["values"]
@@ -250,15 +250,15 @@ class StudentListWindow(tk.Toplevel):
         name = values[1]
 
         if messagebox.askyesno("🗑️ Xác nhận xóa",
-                               f"Bạn có chắc muốn xóa sinh viên?\n\n"
-                               f"Mã SV: {student_id}\n"
+                               f"Bạn có chắc muốn xóa nhân viên?\n\n"
+                               f"Mã NV: {student_id}\n"
                                f"Họ tên: {name}"):
             if self.manager.delete_student(student_id):
                 messagebox.showinfo(
-                    "✅ Thành công", f"Đã xóa sinh viên: {name}")
+                    "✅ Thành công", f"Đã xóa nhân viên: {name}")
                 self.refresh_list()
                 # Reload face_matcher nếu có
                 if self.controller and hasattr(self.controller, 'face_matcher'):
                     self.controller.face_matcher.reload()
             else:
-                messagebox.showerror("❌ Lỗi", "Không thể xóa sinh viên!")
+                messagebox.showerror("❌ Lỗi", "Không thể xóa nhân viên!")

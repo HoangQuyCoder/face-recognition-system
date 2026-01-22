@@ -15,7 +15,7 @@ class HomeUI(BaseFrame):
 
         tk.Label(
             header,
-            text="🏠 HỆ THỐNG ĐIỂM DANH FACE ID",
+            text="🏠 HỆ THỐNG CHẤM CÔNG FACE ID",
             font=("Arial", 22, "bold"),
             bg="#2c3e50",
             fg="white"
@@ -49,7 +49,7 @@ class HomeUI(BaseFrame):
         # === Row 1: Main Actions ===
         self.create_menu_button(
             menu_container,
-            text="👤 ĐĂNG KÝ SINH VIÊN",
+            text="👤 ĐĂNG KÝ NHÂN VIÊN",
             desc="Thêm dữ liệu khuôn mặt mới",
             bg_color="#2ecc71", # Green
             command=lambda: controller.show_frame("EnrollUI"),
@@ -58,8 +58,8 @@ class HomeUI(BaseFrame):
 
         self.create_menu_button(
             menu_container,
-            text="✅ ĐIỂM DANH",
-            desc="Điểm danh realtime bằng camera",
+            text="✅ CHẤM CÔNG",
+            desc="Chấm công realtime bằng camera",
             bg_color="#3498db", # Blue
             command=lambda: controller.show_frame("AttendanceUI"),
             row=0, col=1
@@ -68,8 +68,8 @@ class HomeUI(BaseFrame):
         # === Row 2: Management ===
         self.create_menu_button(
             menu_container,
-            text="📋 DANH SÁCH SINH VIÊN",
-            desc="Xem và quản lý thông tin SV",
+            text="📋 DANH SÁCH NHÂN VIÊN",
+            desc="Xem và quản lý thông tin NV",
             bg_color="#9b59b6", # Purple
             command=self.open_student_list,
             row=1, col=0
@@ -77,7 +77,7 @@ class HomeUI(BaseFrame):
 
         self.create_menu_button(
             menu_container,
-            text="📊 LỊCH SỬ ĐIỂM DANH",
+            text="📊 LỊCH SỬ CHẤM CÔNG",
             desc="Xem báo cáo ra/vào",
             bg_color="#f1c40f", # Yellow/Orange
             text_color="#2c3e50", 

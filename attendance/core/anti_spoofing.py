@@ -22,7 +22,7 @@ class AntiSpoofing:
 
     def __init__(self,
                  model_path=None,
-                 conf_threshold=0.7, #0.8
+                 conf_threshold=0.7,  # 0.8
                  classes=["fake", "real"]):
 
         if hasattr(self, "_initialized") and self._initialized:
