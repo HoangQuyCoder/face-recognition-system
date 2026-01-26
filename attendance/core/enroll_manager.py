@@ -8,7 +8,7 @@ from core.insightface_singleton import InsightFaceSingleton
 class EnrollManager:
     # ================= CONFIG =================
     MIN_CONFIDENCE = 0.60
-    MIN_SAMPLE_SIMILARITY = 0.80  # 0.7
+    MIN_SAMPLE_SIMILARITY = 0.90  # 0.7
     MAX_OUTLIER_DISTANCE = 0.40
     # =========================================
 

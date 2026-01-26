@@ -9,9 +9,9 @@ class MainUI(tk.Tk):
         super().__init__()
 
         self.title("Face Attendance System")
-        self.geometry("1100x600")
+        self.geometry("1200x700")
         self.resizable(True, True)
-        self.minsize(900, 600)
+        self.minsize(1000, 600)
 
         self.face_matcher = FaceMatcher() 
 

@@ -15,7 +15,7 @@ class EnrollUI(BaseFrame):
     # ================= CONFIG =================
     MAX_SAMPLES = 15
     SAMPLE_COOLDOWN = 4
-    DETECT_INTERVAL = 2
+    DETECT_INTERVAL = 5
     MIN_FACE_SIZE = 120
     MIN_CONFIDENCE = 0.65
 
@@ -345,7 +345,8 @@ class EnrollUI(BaseFrame):
 
         faces = []
         if self.frame_count % self.DETECT_INTERVAL == 0:
-            faces = self.app.get(frame_rgb)
+            small = cv2.resize(frame_rgb, None, fx=0.75, fy=0.75)
+            faces = self.app.get(small)
 
         status_text = None
         status_color = "#3498db"

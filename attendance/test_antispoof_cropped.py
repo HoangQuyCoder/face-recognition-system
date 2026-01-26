@@ -45,7 +45,7 @@ while True:
         # is_live, conf, label = anti_spoof.check_liveness(face_crop)
         # Resize face_crop to standard size before checking
         face_crop_resized = cv2.resize(face_crop, (224, 224))  # or YOLO input size
-        is_live, conf, label = anti_spoof.check_liveness(face_crop_resized)
+        is_live, conf, label = anti_spoof.detect_spoof(face_crop_resized)
 
         print(
             f"Face crop size: {face_crop.shape} | is_live: {is_live}, conf: {conf:.2f}, label: {label}")

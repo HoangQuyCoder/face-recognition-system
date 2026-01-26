@@ -15,7 +15,7 @@ while True:
         break
 
     # Test liveness trên toàn bộ frame
-    is_live, conf, label = anti_spoof.check_liveness(frame)
+    is_live, conf, label = anti_spoof.detect_spoof(frame)
 
     print(f"is_live: {is_live}, confidence: {conf:.2f}, label: {label}")
 

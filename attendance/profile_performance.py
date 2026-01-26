@@ -42,7 +42,7 @@ while True:
     
     # Anti-spoofing on full frame
     t_antispoof = time.time()
-    is_live, conf, label = anti_spoof.check_liveness(frame_bgr)
+    is_live, conf, label = anti_spoof.detect_spoof(frame_bgr)
     times["antispoof"].append(time.time() - t_antispoof)
     
     # Detection

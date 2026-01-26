@@ -19,7 +19,7 @@ class AntiSpoofing:
 
     def __init__(self,
                  model_path=None,
-                 conf_threshold=0.85,  # có thể điều chỉnh 0.75-0.85
+                 conf_threshold=0.8,  # 0.75-0.85
                  classes=["fake", "real"]):
 
         if hasattr(self, "_initialized") and self._initialized:
@@ -29,7 +29,7 @@ class AntiSpoofing:
         self.conf_threshold = conf_threshold
         self.classes = classes
 
-        # Resolve model path (giữ nguyên logic cũ của bạn)
+        # Resolve model path 
         if model_path is None:
             BASE_DIR = os.path.dirname(os.path.abspath(__file__))
             PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, "..", ".."))

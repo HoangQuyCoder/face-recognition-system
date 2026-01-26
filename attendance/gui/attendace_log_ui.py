@@ -12,7 +12,7 @@ class AttendanceLogWindow(tk.Toplevel):
     def __init__(self, parent):
         super().__init__(parent)
         self.title("📝 Lịch sử chấm công")
-        self.geometry("1300x700")
+        self.geometry("1200x700")
         self.resizable(True, True)
         self.minsize(1000, 600)
 

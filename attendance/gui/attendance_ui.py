@@ -457,7 +457,7 @@ class AttendanceUI(BaseFrame):
                             f_top < ry2 and f_bottom > ry1):
                         verified = True
                         max_real_conf = max(max_real_conf, rconf)
-                        break  # chỉ cần overlap 1 cái là đủ
+                        break
 
                 if verified and face.normed_embedding is not None:
                     student_id, name, similarity = self.matcher.match(
